@@ -1,53 +1,62 @@
-// index.js const { default: makeWASocket, useSingleFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys'); const { Boom } = require('@hapi/boom'); const P = require('pino'); const fs = require('fs'); const { Configuration, OpenAIApi } = require("openai");
+const { default: makeWASocket, useSingleFileAuthState, makeWALegacySocket, makeWASocketOptions } = require('@whiskeysockets/baileys');
+const { DisconnectReason, fetchLatestBaileysVersion, makeInMemoryStore, useMultiFileAuthState, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const readline = require('readline');
+const commandHandler = require('./lib/commandHandler');
+const fs = require('fs');
 
-const config = require('./config'); const { state, saveState } = useSingleFileAuthState('./auth_info.json');
-
-const openai = new OpenAIApi(new Configuration({ apiKey: config.OPENAI_API_KEY, }));
-
-async function connectToWhatsApp() { const { version } = await fetchLatestBaileysVersion(); const sock = makeWASocket({ version, logger: P({ level: 'silent' }), printQRInTerminal: true, auth: state, });
-
-sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-        const shouldReconnect = (lastDisconnect.error = new Boom(lastDisconnect?.error))?.output?.statusCode !== DisconnectReason.loggedOut;
-        if (shouldReconnect) {
-            connectToWhatsApp();
-        }
-    } else if (connection === 'open') {
-        console.log('Connected to WhatsApp!');
-    }
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
 });
 
-sock.ev.on('messages.upsert', async ({ messages, type }) => {
+async function startBot(authType = 'qr') {
+  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: authType === 'qr',
+    logger: pino({ level: 'silent' }),
+    browser: ['Sesmo-Bot', 'Chrome', '1.0'],
+  });
+
+  // Generate pairing code if chosen
+  if (authType === 'pairing') {
+    const code = await sock.requestPairingCode('YOUR_PHONE_NUMBER_HERE'); // Replace with your phone number
+    console.log('\nPairing Code:', code);
+  }
+
+  // Handle messages
+  sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
-
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-    if (!text) return;
-
-    if (text === '!help') {
-        await sock.sendMessage(msg.key.remoteJid, { text: 'Commands: !help, !ai <question>' });
-    } else if (text.startsWith('!ai')) {
-        const prompt = text.replace('!ai', '').trim();
-        if (!prompt) return;
-
-        try {
-            const completion = await openai.createChatCompletion({
-                model: "gpt-3.5-turbo",
-                messages: [{ role: "user", content: prompt }]
-            });
-            const aiReply = completion.data.choices[0].message.content;
-            await sock.sendMessage(msg.key.remoteJid, { text: aiReply });
-        } catch (err) {
-            await sock.sendMessage(msg.key.remoteJid, { text: 'Error getting AI response.' });
-            console.error(err);
-        }
+    
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    if (text.startsWith('!')) {
+      await commandHandler(sock, msg, text);
     }
-});
+  });
 
-sock.ev.on('creds.update', saveState);
+  // Save credentials
+  sock.ev.on('creds.update', saveCreds);
 
+  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+    if (connection === 'close') {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Connection closed. Reconnecting...', shouldReconnect);
+      if (shouldReconnect) startBot(authType);
+    } else if (connection === 'open') {
+      console.log('Bot connected to WhatsApp!');
+    }
+  });
 }
 
-connectToWhatsApp();
-
+// Ask user which method to use
+rl.question('Login with: (1) QR Code, (2) Pairing Code? ', (choice) => {
+  if (choice === '2') {
+    startBot('pairing');
+  } else {
+    startBot('qr');
+  }
+  rl.close();
+});
