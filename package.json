@@ -1,18 +1,14 @@
 {
   "name": "sesmo-bot",
   "version": "1.0.0",
-  "description": "An advanced WhatsApp bot using Baileys and OpenAI",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": ["whatsapp", "bot", "baileys", "openai", "gpt"],
-  "author": "Sesmo2",
-  "license": "MIT",
   "dependencies": {
-    "@hapi/boom": "^11.1.4",
     "@whiskeysockets/baileys": "^6.7.0",
-    "openai": "^4.27.0",
+    "express": "^4.18.2",
+    "qrcode": "^1.5.1",
     "pino": "^8.0.0"
   }
 }
