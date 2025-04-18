@@ -1,0 +1,26 @@
+{
+  "name": "sesmo-bot",
+  "version": "1.0.0",
+  "description": "An advanced WhatsApp bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "advanced",
+    "baileys"
+  ],
+  "author": "Your Name or GitHub Username",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.6.0"
+    // You might add other dependencies here later
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+    // Optional: For development, auto-restarts the bot on code changes
+  }
+}
