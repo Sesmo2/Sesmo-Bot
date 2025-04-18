@@ -47,6 +47,7 @@ async function startBot(authType = 'qr') {
       if (shouldReconnect) startBot(authType);
     } else if (connection === 'open') {
       console.log('Bot connected to WhatsApp!');
+      sock.sendMessage(sock.user.id, { text: '✅ Sesmo-Bot is now online!' }); // Send confirmation message
     }
   });
 }
