@@ -1,12 +1,16 @@
 # Sesmo-Bot
 
-A smart WhatsApp bot using Baileys and OpenAI.
+A WhatsApp bot powered by Baileys — supports QR and pairing code login.
 
 ## Features
-- WhatsApp QR pairing
-- GPT-3.5 AI chat
-- Simple commands
+- Pair or scan to login
+- AI responses (!ai)
+- Status viewer (!status)
+- Help command (!help)
 
-## Setup
+## How to Use
 
-1. Clone the repo:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Sesmo2/Sesmo-Bot
+   cd Sesmo-Bot
