@@ -1,7 +1,7 @@
 
 {
-    "bot-name": "BYTE-MD",
-    "description": "BYTE-MD made for people on Earth",
+    "bot-name": "Sesmo-Bot",
+    "description": "Sesmo-Bot made for people on Earth",
     "logo": "https://raw.githubusercontent.com/HyHamza/HyHamza/refs/heads/main/Images/XByte-logo.png",
     "keywords": ["bot"],
     "documentation-link": "https://session.talkdrove.com",
@@ -9,7 +9,7 @@
   
     "env": {
       "SESSION_ID": {
-        "description": "Put your SESSION_ID here. Make sure it starts with Byte;;;, or get session id from here, https://session.talkdrove.com",
+        "description": "Put your SESSION_ID here. Make sure it starts with Sesmo;;;, or get session id from here, https://session.talkdrove.com",
         "value":"",
         "required": true
         
