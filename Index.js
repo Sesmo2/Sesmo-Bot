@@ -1,5 +1,4 @@
-const { default: makeWASocket, useSingleFileAuthState, makeWALegacySocket, makeWASocketOptions } = require('@whiskeysockets/baileys');
-const { DisconnectReason, fetchLatestBaileysVersion, makeInMemoryStore, useMultiFileAuthState, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const readline = require('readline');
 const commandHandler = require('./lib/commandHandler');
@@ -43,7 +42,7 @@ async function startBot(authType = 'qr') {
   sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
     if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Connection closed. Reconnecting...', shouldReconnect);
+      console.error('Connection closed:', lastDisconnect?.error);
       if (shouldReconnect) startBot(authType);
     } else if (connection === 'open') {
       console.log('Bot connected to WhatsApp!');
