@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Sesmo-Bot Connect</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #0f172a;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    .box {
+      background: #1e293b;
+      padding: 30px;
+      border-radius: 15px;
+      display: inline-block;
+    }
+    img {
+      width: 250px;
+      border-radius: 10px;
+    }
+    .refresh {
+      font-size: 0.9em;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Sesmo-Bot Pairing</h1>
+    <div id="content">Loading...</div>
+    <p class="refresh">Refreshing every 5s...</p>
+  </div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/status');
+      const html = await res.text();
+      document.getElementById('content').innerHTML = html;
+    }
+    load();
+    setInterval(load, 5000);
+  </script>
+</body>
+</html>
