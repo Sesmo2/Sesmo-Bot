@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+ const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const express = require('express');
 const fs = require('fs');
 const pino = require('pino');
@@ -37,7 +37,7 @@ async function startBot() {
 
   setTimeout(async () => {
     try {
-      const code = await sock.requestPairingCode('123456789'); // Optional
+      const code = await sock.requestPairingCode('123456789');
       pairingCodeText = code;
       qrCodeImage = null;
     } catch (err) {
