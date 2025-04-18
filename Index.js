@@ -1,62 +1,68 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const readline = require('readline');
-const commandHandler = require('./lib/commandHandler');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const express = require('express');
 const fs = require('fs');
+const pino = require('pino');
+const QRCode = require('qrcode');
+const path = require('path');
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-async function startBot(authType = 'qr') {
+let qrCodeImage = null;
+let pairingCodeText = null;
+
+async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: authType === 'qr',
+    printQRInTerminal: false,
     logger: pino({ level: 'silent' }),
-    browser: ['Sesmo-Bot', 'Chrome', '1.0'],
+    browser: ['Sesmo-Bot', 'Chrome', '1.0']
   });
 
-  // Generate pairing code if chosen
-  if (authType === 'pairing') {
-    const code = await sock.requestPairingCode('YOUR_PHONE_NUMBER_HERE'); // Replace with your phone number
-    console.log('\nPairing Code:', code);
-  }
-
-  // Handle messages
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
-    
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    if (text.startsWith('!')) {
-      await commandHandler(sock, msg, text);
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, qr } = update;
+    if (qr) {
+      qrCodeImage = await QRCode.toDataURL(qr);
+      pairingCodeText = null;
+    }
+    if (connection === 'open') {
+      console.log('✅ Bot is connected!');
+      qrCodeImage = null;
+      pairingCodeText = null;
     }
   });
 
-  // Save credentials
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
-    if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.error('Connection closed:', lastDisconnect?.error);
-      if (shouldReconnect) startBot(authType);
-    } else if (connection === 'open') {
-      console.log('Bot connected to WhatsApp!');
-      sock.sendMessage(sock.user.id, { text: '✅ Sesmo-Bot is now online!' }); // Send confirmation message
+  setTimeout(async () => {
+    try {
+      const code = await sock.requestPairingCode('123456789'); // Optional
+      pairingCodeText = code;
+      qrCodeImage = null;
+    } catch (err) {
+      console.log("Pairing code not available:", err.message);
     }
-  });
+  }, 3000);
 }
 
-// Ask user which method to use
-rl.question('Login with: (1) QR Code, (2) Pairing Code? ', (choice) => {
-  if (choice === '2') {
-    startBot('pairing');
+// Serve static HTML
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Endpoint to fetch current QR or pairing code
+app.get('/status', (req, res) => {
+  let html = '';
+  if (qrCodeImage) {
+    html += `<p>Scan this QR Code:</p><img src="${qrCodeImage}" />`;
+  } else if (pairingCodeText) {
+    html += `<p>Enter this pairing code in WhatsApp:</p><h2>${pairingCodeText}</h2>`;
   } else {
-    startBot('qr');
+    html += `<p>✅ Bot is already connected or starting...</p>`;
   }
-  rl.close();
+  res.send(html);
+});
+
+app.listen(PORT, () => {
+  console.log(`Web server running on http://localhost:${PORT}`);
+  startBot();
 });
