@@ -1,41 +1,24 @@
 const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server);
+const fs = require('fs');
 
-let latestCode = '';
+let latestCode = ''; // to store pairing or QR code
 
-io.on('connection', (socket) => {
-    socket.emit('code', latestCode);
+// Public folder for HTML
+app.use(express.static('public'));
+
+// Endpoint to get the latest code
+app.get('/code', (req, res) => {
+  res.send(latestCode);
 });
 
-function updateCode(code) {
-    latestCode = code;
-    io.emit('code', code);
+// Update code from main bot file
+function setCode(code) {
+  latestCode = code;
 }
 
-app.get('/', (req, res) => {
-    res.send(`
-        <html>
-        <head><title>Sesmo-Bot Login</title></head>
-        <body>
-            <h2>QR / Pairing Code</h2>
-            <pre id="code">Waiting...</pre>
-            <script src="/socket.io/socket.io.js"></script>
-            <script>
-                const socket = io();
-                socket.on('code', (code) => {
-                    document.getElementById('code').innerText = code;
-                });
-            </script>
-        </body>
-        </html>
-    `);
+app.listen(3000, () => {
+  console.log('Web server running on http://localhost:3000');
 });
 
-server.listen(3000, () => console.log('Web UI running on http://localhost:3000'));
-
-module.exports = updateCode;
+module.exports = { setCode };
