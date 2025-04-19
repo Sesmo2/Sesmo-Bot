@@ -20,10 +20,10 @@ function updateCode(code) {
 app.get('/', (req, res) => {
     res.send(`
         <html>
-        <head><title>Sesmo-Bot Code Viewer</title></head>
+        <head><title>Sesmo-Bot Login</title></head>
         <body>
             <h2>QR / Pairing Code</h2>
-            <pre id="code">Waiting for code...</pre>
+            <pre id="code">Waiting...</pre>
             <script src="/socket.io/socket.io.js"></script>
             <script>
                 const socket = io();
@@ -36,6 +36,6 @@ app.get('/', (req, res) => {
     `);
 });
 
-server.listen(3000, () => console.log('Web Code Interface: http://localhost:3000'));
+server.listen(3000, () => console.log('Web UI running on http://localhost:3000'));
 
 module.exports = updateCode;
