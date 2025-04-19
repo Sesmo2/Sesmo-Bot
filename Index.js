@@ -1,88 +1,83 @@
 const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore,
-    DisconnectReason
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeInMemoryStore,
+  jidNormalizedUser
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
-const P = require('pino');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
-const updateCode = require('./server');
-require('dotenv').config();
+const path = require('path');
 
-const startSocket = async () => {
-    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
-    const { version } = await fetchLatestBaileysVersion();
+// Optional: in-memory store for better logging/debugging
+const store = makeInMemoryStore({
+  logger: console
+});
+store.readFromFile('./session_store.json');
+setInterval(() => {
+  store.writeToFile('./session_store.json');
+}, 10_000);
 
-    const sock = makeWASocket({
-        version,
-        logger: P({ level: 'silent' }),
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
-        },
-        browser: ['Sesmo-Bot', 'Safari', '1.0.0'],
-        printQRInTerminal: true
-    });
+// Start the bot
+async function startBot() {
+  // Auth state from session folder
+  const { state, saveCreds } = await useMultiFileAuthState('./session');
 
-    sock.ev.on('creds.update', saveCreds);
+  const { version, isLatest } = await fetchLatestBaileysVersion();
+  console.log(`Using Baileys version: ${version}, latest: ${isLatest}`);
 
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr, pairingCode } = update;
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: true,
+    logger: console
+  });
 
-        if (qr) {
-            console.log('Scan QR:', qr);
-            updateCode(`Scan this QR:\n\n${qr}`);
-        }
+  store.bind(sock.ev); // bind store to socket events
 
-        if (pairingCode) {
-            console.log('Pairing code:', pairingCode);
-            updateCode(`Pairing Code:\n\n${pairingCode}`);
-        }
+  // Save updated credentials when changed
+  sock.ev.on('creds.update', saveCreds);
 
-        if (connection === 'open') {
-            console.log('✅ Connected to WhatsApp');
-            await sendSessionToSelf(sock);
-        }
+  // Connection updates
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
 
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom)
-                && lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut;
-            console.log('connection closed. Reconnecting...', shouldReconnect);
-            if (shouldReconnect) startSocket();
-        }
-    });
+    if (connection === 'close') {
+      const shouldReconnect = (lastDisconnect?.error instanceof Boom)
+        ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
+        : true;
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+      console.log('Connection closed. Reconnecting:', shouldReconnect);
 
-        const from = msg.key.remoteJid;
-        const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+      if (shouldReconnect) {
+        startBot(); // Reconnect
+      }
+    }
 
-        if (body === '!help') {
-            await sock.sendMessage(from, { text: 'Hi, I\'m Sesmo-Bot.\nTry:\n!ai <question>\n!status' });
-        }
+    if (connection === 'open') {
+      console.log('Bot is now connected!');
+    }
+  });
 
-        if (body.startsWith('!ai ')) {
-            const reply = `Pretend AI: You asked "${body.slice(4)}"`;
-            await sock.sendMessage(from, { text: reply });
-        }
+  // Incoming messages
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
 
-        if (body === '!status') {
-            await sock.sendMessage(from, { text: 'Bot is working!' });
-        }
-    });
-};
+    const msg = messages[0];
+    const sender = jidNormalizedUser(msg.key.remoteJid);
+    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
 
-const sendSessionToSelf = async (sock) => {
-    const sessionId = uuidv4();
-    const owner = process.env.OWNER_NUMBER;
-    if (!owner) return console.warn("OWNER_NUMBER not set in .env");
-    await sock.sendMessage(owner, { text: `✅ Your session ID is:\n\n${sessionId}` });
-    console.log("Session ID sent to your WhatsApp.");
-};
+    if (!body) return;
 
-startSocket();
+    console.log(`Message from ${sender}: ${body}`);
+
+    if (body === '!help') {
+      await sock.sendMessage(sender, {
+        text: `Available commands:\n!help - Show this help message`
+      });
+    }
+  });
+}
+
+startBot();
