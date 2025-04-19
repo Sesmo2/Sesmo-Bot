@@ -9,7 +9,7 @@ const { Boom } = require('@hapi/boom');
 const P = require('pino');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const updateCode = require('./server'); // Connect to web UI
+const updateCode = require('./server');
 require('dotenv').config();
 
 const startSocket = async () => {
@@ -34,12 +34,12 @@ const startSocket = async () => {
 
         if (qr) {
             console.log('Scan QR:', qr);
-            updateCode(`Scan this QR:\n${qr}`);
+            updateCode(`Scan this QR:\n\n${qr}`);
         }
 
         if (pairingCode) {
             console.log('Pairing code:', pairingCode);
-            updateCode(`Pairing Code:\n${pairingCode}`);
+            updateCode(`Pairing Code:\n\n${pairingCode}`);
         }
 
         if (connection === 'open') {
@@ -55,7 +55,6 @@ const startSocket = async () => {
         }
     });
 
-    // Message event
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
@@ -64,17 +63,16 @@ const startSocket = async () => {
         const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
         if (body === '!help') {
-            await sock.sendMessage(from, { text: 'Hello! I am Sesmo-Bot. Try !ai <question>, !status' });
+            await sock.sendMessage(from, { text: 'Hi, I\'m Sesmo-Bot.\nTry:\n!ai <question>\n!status' });
         }
 
         if (body.startsWith('!ai ')) {
-            const reply = `Pretend I'm AI: You asked "${body.slice(4)}"`;
+            const reply = `Pretend AI: You asked "${body.slice(4)}"`;
             await sock.sendMessage(from, { text: reply });
         }
 
         if (body === '!status') {
-            const status = msg?.pushName ? `${msg.pushName} viewed the bot.` : 'Status accessed';
-            await sock.sendMessage(from, { text: status });
+            await sock.sendMessage(from, { text: 'Bot is working!' });
         }
     });
 };
