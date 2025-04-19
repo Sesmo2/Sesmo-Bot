@@ -1,68 +1,90 @@
- const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const express = require('express');
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    DisconnectReason
+} = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const P = require('pino');
 const fs = require('fs');
-const pino = require('pino');
-const QRCode = require('qrcode');
-const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+const updateCode = require('./server'); // Connect to web UI
+require('dotenv').config();
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const startSocket = async () => {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+    const { version } = await fetchLatestBaileysVersion();
 
-let qrCodeImage = null;
-let pairingCodeText = null;
+    const sock = makeWASocket({
+        version,
+        logger: P({ level: 'silent' }),
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
+        },
+        browser: ['Sesmo-Bot', 'Safari', '1.0.0'],
+        printQRInTerminal: true
+    });
 
-async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
-    browser: ['Sesmo-Bot', 'Chrome', '1.0']
-  });
+    sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, qr } = update;
-    if (qr) {
-      qrCodeImage = await QRCode.toDataURL(qr);
-      pairingCodeText = null;
-    }
-    if (connection === 'open') {
-      console.log('✅ Bot is connected!');
-      qrCodeImage = null;
-      pairingCodeText = null;
-    }
-  });
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr, pairingCode } = update;
 
-  sock.ev.on('creds.update', saveCreds);
+        if (qr) {
+            console.log('Scan QR:', qr);
+            updateCode(`Scan this QR:\n${qr}`);
+        }
 
-  setTimeout(async () => {
-    try {
-      const code = await sock.requestPairingCode('123456789');
-      pairingCodeText = code;
-      qrCodeImage = null;
-    } catch (err) {
-      console.log("Pairing code not available:", err.message);
-    }
-  }, 3000);
-}
+        if (pairingCode) {
+            console.log('Pairing code:', pairingCode);
+            updateCode(`Pairing Code:\n${pairingCode}`);
+        }
 
-// Serve static HTML
-app.use(express.static(path.join(__dirname, 'public')));
+        if (connection === 'open') {
+            console.log('✅ Connected to WhatsApp');
+            await sendSessionToSelf(sock);
+        }
 
-// Endpoint to fetch current QR or pairing code
-app.get('/status', (req, res) => {
-  let html = '';
-  if (qrCodeImage) {
-    html += `<p>Scan this QR Code:</p><img src="${qrCodeImage}" />`;
-  } else if (pairingCodeText) {
-    html += `<p>Enter this pairing code in WhatsApp:</p><h2>${pairingCodeText}</h2>`;
-  } else {
-    html += `<p>✅ Bot is already connected or starting...</p>`;
-  }
-  res.send(html);
-});
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom)
+                && lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut;
+            console.log('connection closed. Reconnecting...', shouldReconnect);
+            if (shouldReconnect) startSocket();
+        }
+    });
 
-app.listen(PORT, () => {
-  console.log(`Web server running on http://localhost:${PORT}`);
-  startBot();
-});
+    // Message event
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const from = msg.key.remoteJid;
+        const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+
+        if (body === '!help') {
+            await sock.sendMessage(from, { text: 'Hello! I am Sesmo-Bot. Try !ai <question>, !status' });
+        }
+
+        if (body.startsWith('!ai ')) {
+            const reply = `Pretend I'm AI: You asked "${body.slice(4)}"`;
+            await sock.sendMessage(from, { text: reply });
+        }
+
+        if (body === '!status') {
+            const status = msg?.pushName ? `${msg.pushName} viewed the bot.` : 'Status accessed';
+            await sock.sendMessage(from, { text: status });
+        }
+    });
+};
+
+const sendSessionToSelf = async (sock) => {
+    const sessionId = uuidv4();
+    const owner = process.env.OWNER_NUMBER;
+    if (!owner) return console.warn("OWNER_NUMBER not set in .env");
+    await sock.sendMessage(owner, { text: `✅ Your session ID is:\n\n${sessionId}` });
+    console.log("Session ID sent to your WhatsApp.");
+};
+
+startSocket();
