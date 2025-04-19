@@ -1,26 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>WhatsApp Bot Pairing Code</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WhatsApp Bot Pairing Code</title>
   <style>
-    body { font-family: sans-serif; text-align: center; padding-top: 50px; }
-    #code { font-size: 28px; font-weight: bold; color: green; }
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding-top: 50px;
+      background-color: #f0f0f0;
+    }
+    h1 {
+      color: #333;
+    }
+    #code {
+      font-size: 28px;
+      font-weight: bold;
+      color: green;
+    }
+    .loading {
+      font-size: 20px;
+      color: gray;
+    }
   </style>
 </head>
 <body>
   <h1>Scan or Enter the Code to Link WhatsApp</h1>
-  <div id="code">Loading...</div>
+  <div id="code" class="loading">Loading...</div>
 
   <script>
+    // Fetch pairing code from the server and update the page
     async function fetchCode() {
-      const res = await fetch('/code');
-      const text = await res.text();
-      document.getElementById('code').textContent = text || 'Waiting for code...';
+      try {
+        const res = await fetch('/code');
+        const text = await res.text();
+        if (text) {
+          document.getElementById('code').textContent = text;
+          document.getElementById('code').classList.remove('loading'); // Remove loading style once code is fetched
+        } else {
+          document.getElementById('code').textContent = 'Waiting for code...';
+        }
+      } catch (error) {
+        console.error('Error fetching the code:', error);
+        document.getElementById('code').textContent = 'Error fetching code';
+      }
     }
 
+    // Periodically fetch the code every 2 seconds
     setInterval(fetchCode, 2000);
-    fetchCode();
+    fetchCode();  // Initial fetch when the page loads
   </script>
 </body>
 </html>
